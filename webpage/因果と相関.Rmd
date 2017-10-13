@@ -1,0 +1,199 @@
+---
+title: "【写経】因果関係と相関関係"
+author: "ken.nakano"
+date: "2017/10/13"
+output: html_document
+---
+<br />
+<br />
+この記事を写経するだけのスクリプト  
+http://takehiko-i-hayashi.hatenablog.com/entry/20130919/1379560929#f19  
+<br />
+<br />
+
+# 因果関係があるのに相関関係が見られない(1)
+
+
+```{r setup, include=FALSE}
+# ライブラリ
+library(psych)
+library(dplyr)
+```
+<br />
+## 仮想データの作成
+
+```{r, comment=FALSE, warning=FALSE}
+# サンプルサイズを5000に設定
+n.sample <- 5000
+
+# 平均0, 標準偏差1の正規分布から5000個の「水田面積」の値をランダムに生成
+suiden.v <- rnorm(n.sample, mean=0, sd=1)
+
+# 平均0, 標準偏差1の正規分布から誤差項を作成
+error1.v <- rnorm(n.sample, mean=0, sd=1)
+
+# 「農薬濃度=1.0×水田面積+誤差」から農薬濃度の値を生成, 標準化
+nouyaku.v <- 1.0*suiden.v + error1.v
+nouyaku.v <- scale(nouyaku.v)
+
+# 平均0, 標準偏差1の正規分布から誤差項を作成
+error2.v <- rnorm(n.sample, mean=0, sd=1)
+
+# 「生物種数=0.5×水田面積 - 0.3×農薬濃度 + 誤差」から生物種数を生成
+seibutsu.v <- 0.5*suiden.v - 0.3*nouyaku.v + error2.v
+
+
+# 生成したデータをまとめる
+data <- data.frame(
+  syusuu = seibutsu.v,
+  nouyaku = nouyaku.v,
+  suiden = suiden.v
+)
+
+head(data,10)
+```
+
+これで、
+
+* 水田面積UP → 生物種数UP
+* 水田面積UP → 農薬濃度UP
+* 農薬濃度UP → 生物種数DOWN
+
+のデータが作成できた。  
+  
+<br />
+<br />
+
+## データを眺める
+
+```{r, comment=FALSE, warning=FALSE}
+pairs.panels(data[1:500,], col="green", pch=20, ps=0.1)
+```
+
+散布図・相関係数より、水田面積と農薬濃度には相関があることがわかるけれど、生物種数と農薬,水田面積は相関がほとんど無いように見える（生物種数は農薬,水田面積から生成したにも関わらず）
+
+ここで、事態を理解するために回帰分析を適用してみる
+```{r, comment=FALSE, warning=FALSE}
+fit.lm.1 <- lm(syusuu ~ nouyaku, data=data)
+summary(fit.lm.1)
+```
+
+生物種数と農薬濃度の単回帰の結果は、
+
+* 回帰係数：0.05とか
+* p値<.01（これは記事と異なる部分）
+
+で、実際の効果（生物種数=0.5×水田面積 - 0.3×農薬濃度 + 誤差）よりも桁が1つ少なく、かつ符号が逆になっている。
+
+<br />
+
+これは水田面積が交絡因子として作用しているからで、交絡を調整するには、交絡因子を説明変数に追加して回帰すればよい。
+```{r, comment=FALSE, warning=FALSE}
+fit.lm.2 <- lm(syusuu ~ nouyaku + suiden, data=data)
+summary(fit.lm.2)
+```
+
+推定結果が元のデータ生成式（生物種数=0.5×水田面積 - 0.3×農薬濃度 + 誤差）とかなり近いことがわかる。
+
+
+ここまでは普通の交絡の話。問題はここから。
+
+<br />
+<br />
+
+# 因果関係があるのに相関関係が見られない(2)
+
+## 仮想データの作成
+```{r, comment=FALSE, warning=FALSE}
+# サンプルサイズを5000に設定
+n.sample <- 5000
+
+# それぞれの能力値を平均ゼロ、標準偏差1の正規分布に従いランダムに生成
+bike_ability.v <- rnorm(n.sample,mean=0,sd=1)
+run_ability.v <- rnorm(n.sample,mean=0,sd=1)
+swim_ability.v <- rnorm(n.sample,mean=0,sd=1)
+
+# 誤差項の作成
+error1.v <- rnorm(n.sample,mean=0,sd=1)
+
+# デュアスロンタイムデータを「デュアスロンタイム＝ -0.5×自転車力 - 1.5×走力 ＋ 誤差」の関係式により作成
+duathlon_time.v <- -0.5*bike_ability.v -  1.5*run_ability.v + error1.v
+
+# 誤差項の作成
+error2.v <- rnorm(n.sample,mean=0,sd=1)
+
+# トライアスロンタイムデータを「トライアスロンタイム＝ -1×自転車力 - 0.5×走力 - 0.5×泳力＋ 誤差」の関係式により作成
+triathlon_time.v <- -1*bike_ability.v - 0.5*run_ability.v - 0.5*swim_ability.v + error2.v
+
+
+# 生成したデータをまとめる
+data <- data.frame(
+  bike = bike_ability.v,
+  run = run_ability.v,
+  swim = swim_ability.v,
+  duathlon = duathlon_time.v,
+  triathlon = triathlon_time.v
+)
+
+
+head(data, 10)
+```
+
+<br />
+
+## データを眺める
+
+```{r, comment=FALSE, warning=FALSE}
+pairs.panels(data[1:500,], col="green", pch=20, ps=0.1)
+```
+
+この散布図を見ると、
+
+* bike,runとdua,triに負の相関
+* bike,runには相関なし
+
+で、作成したデータの特徴となんら矛盾のないもの。
+
+
+これに対して回帰分析を適用する。
+
+```{r, comment=FALSE, warning=FALSE}
+# デュアスロンタイム ~ 自転車力の単回帰
+fit.lm.1 <- lm(duathlon ~ bike, data=data)
+summary(fit.lm.1)
+```
+
+単回帰の結果は、元々のデータ生成時の関係式における係数「-0.5」に近い値になっており、「自転車→デュアスロンタイム」の因果効果を適切に推定している。つまりこの例では単回帰で十分ということ。
+
+<br />
+<br />
+
+次に、このケースに対して重回帰分析を行う。
+ただし、変数として「走力」が測定されておらず、代わりに「トライアスロンタイム」のデータだけがある状況を考える。
+
+そして、とりあえず*「説明変数（自転車力）と関連のありそうな変数はモデルに入れておく」*という方針で、
+```{r, comment=FALSE, warning=FALSE}
+fit.lm.2 <- lm(duathlon ~ bike + triathlon, data=data)
+summary(fit.lm.2)
+```
+
+この解析の結果、自転車力の偏回帰係数は元々のデータ生成時の関係式における係数「-0.5」とは全く異なり、有意差も消えてしまっている。
+
+
+つまり、トライアスロンのタイムを加えることにより、「自転車力→デュアスロンタイム」の因果効果がすっかり見えなくなってしまったということ。
+
+<br />
+
+じつは、このケースでは合流点であるトライアスロンタイムを加えることで、走力が交絡因子へと変化してしまう。
+
+※なので、さらに走力を説明変数に加えると
+```{r, comment=FALSE, warning=FALSE}
+fit.lm.3 <- lm(duathlon ~ bike + run + triathlon, data=data)
+summary(fit.lm.3)
+```
+
+
+で、「デュアスロンタイム＝ -0.5×自転車力 - 1.5×走力 ＋ 誤差」に近くなる = 交絡を調整できる
+
+
+※記事ではこのあとAICの議論に。「AIC最小」と「偏回帰係数が因果効果を適切に反映している」ことは本質的に別の話
