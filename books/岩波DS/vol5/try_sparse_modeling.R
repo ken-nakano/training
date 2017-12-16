@@ -19,10 +19,36 @@ describe(df)
 
 
 # まずは何も考えずに重回帰 ------------------------------------------------------------
-fit.lm <- lm(medv ~ ., data = df)
+df.lm <- data.frame(cbind(scale(df %>% select(-medv)), medv = df$medv))
+fit.lm <- lm(medv ~ ., data = df.lm)
+
 summary(fit.lm)
 
- 
+### 手動で変数選択する
+fit.lm.2 <- lm(medv ~
+                 crim +
+                 zn +
+                 # indus +
+                 chas +
+                 nox +
+                 rm +
+                 # age +
+                 dis +
+                 rad +
+                 tax +
+                 ptratio +
+                 black +
+                 lstat
+               , data = df.lm)
+
+summary(fit.lm.2) # indus と age を削除して後は残す。これと以下のL1正則化の結果を比較してみる
+
+
+
+
+
+
+
 # glmnetを試す ---------------------------------------------------------------
 y <- unlist(df %>% select(medv))
 x <- scale(as.matrix(df %>% select(-medv))) # matrix型にする必要あり。標準化もしておく
